@@ -7,9 +7,10 @@ from kivy.properties import StringProperty
 from kivy.lang import Builder
 from kivy.clock import Clock
 from kivy.utils import platform
+from kivy.uix.video import Video
+from kivy.uix.popup import Popup
 import urllib.request
 import threading
-import webbrowser
 import re
 
 Builder.load_string('''
@@ -61,11 +62,9 @@ class MainLayout(BoxLayout):
             for line in lines:
                 line = line.strip()
                 if line.startswith('#EXTINF:'):
-                    # Find category
                     group_title_match = re.search(r'group-title="([^"]+)"', line)
                     category = group_title_match.group(1) if group_title_match else "Uncategorized"
                     
-                    # Find channel name
                     name_parts = line.split(',')
                     name = name_parts[-1] if len(name_parts) > 1 else "Unknown"
                     
@@ -119,10 +118,22 @@ class IPTVApp(App):
             except Exception as e:
                 print("Error launching intent on Android:", e)
         else:
-            # Fallback for desktop testing: open the URL in the default web browser,
-            # or you could hook up python-vlc here if you install it.
-            print("Running on desktop. Opening URL in browser:", url)
-            webbrowser.open(url)
+            # Desktop Simulator Fallback using Kivy's Video Player
+            print(f"Running on desktop. Playing video in Kivy Video popup: {url}")
+            
+            # Create a simple video widget
+            video = Video(source=url, state='play', options={'allow_stretch': True})
+            
+            # Create a Popup to act as a fullscreen overlay
+            self.popup = Popup(
+                title="Video Player (Click outside to close)", 
+                content=video,
+                size_hint=(0.9, 0.9)
+            )
+            
+            # Stop the video when the popup is closed
+            self.popup.bind(on_dismiss=lambda popup: setattr(video, 'state', 'stop'))
+            self.popup.open()
 
 if __name__ == '__main__':
     IPTVApp().run()
