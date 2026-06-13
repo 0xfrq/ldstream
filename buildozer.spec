@@ -1,4 +1,4 @@
-﻿[app]
+[app]
 title = IPTVApp
 package.name = iptvapp
 package.domain = org.test
