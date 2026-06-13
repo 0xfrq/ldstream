@@ -105,35 +105,22 @@ class IPTVApp(App):
         return MainLayout()
         
     def play_video(self, url):
-        if platform == 'android':
-            try:
-                from jnius import autoclass
-                PythonActivity = autoclass('org.kivy.android.PythonActivity')
-                Intent = autoclass('android.content.Intent')
-                Uri = autoclass('android.net.Uri')
-                
-                intent = Intent(Intent.ACTION_VIEW)
-                intent.setDataAndType(Uri.parse(url), "video/*")
-                PythonActivity.mActivity.startActivity(intent)
-            except Exception as e:
-                print("Error launching intent on Android:", e)
-        else:
-            # Desktop Simulator Fallback using Kivy's Video Player
-            print(f"Running on desktop. Playing video in Kivy Video popup: {url}")
-            
-            # Create a simple video widget
-            video = Video(source=url, state='play', options={'allow_stretch': True})
-            
-            # Create a Popup to act as a fullscreen overlay
-            self.popup = Popup(
-                title="Video Player (Click outside to close)", 
-                content=video,
-                size_hint=(0.9, 0.9)
-            )
-            
-            # Stop the video when the popup is closed
-            self.popup.bind(on_dismiss=lambda popup: setattr(video, 'state', 'stop'))
-            self.popup.open()
+        # We now use an in-app popup video player for BOTH Android and Desktop!
+        # No external apps (like VLC/MX Player) are required.
+        
+        # Create a simple video widget
+        video = Video(source=url, state='play', options={'allow_stretch': True})
+        
+        # Create a Popup to act as a fullscreen overlay
+        self.popup = Popup(
+            title="Video Player (Tap outside to close)", 
+            content=video,
+            size_hint=(0.95, 0.95)
+        )
+        
+        # Stop the video when the popup is closed
+        self.popup.bind(on_dismiss=lambda popup: setattr(video, 'state', 'stop'))
+        self.popup.open()
 
 if __name__ == '__main__':
     IPTVApp().run()
