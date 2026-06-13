@@ -6,8 +6,10 @@ from kivy.uix.recycleview import RecycleView
 from kivy.properties import StringProperty
 from kivy.lang import Builder
 from kivy.clock import Clock
+from kivy.utils import platform
 import urllib.request
 import threading
+import webbrowser
 import re
 
 Builder.load_string('''
@@ -104,17 +106,23 @@ class IPTVApp(App):
         return MainLayout()
         
     def play_video(self, url):
-        try:
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Intent = autoclass('android.content.Intent')
-            Uri = autoclass('android.net.Uri')
-            
-            intent = Intent(Intent.ACTION_VIEW)
-            intent.setDataAndType(Uri.parse(url), "video/*")
-            PythonActivity.mActivity.startActivity(intent)
-        except Exception as e:
-            print("Not running on Android or jnius not available. URL:", url)
+        if platform == 'android':
+            try:
+                from jnius import autoclass
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                Intent = autoclass('android.content.Intent')
+                Uri = autoclass('android.net.Uri')
+                
+                intent = Intent(Intent.ACTION_VIEW)
+                intent.setDataAndType(Uri.parse(url), "video/*")
+                PythonActivity.mActivity.startActivity(intent)
+            except Exception as e:
+                print("Error launching intent on Android:", e)
+        else:
+            # Fallback for desktop testing: open the URL in the default web browser,
+            # or you could hook up python-vlc here if you install it.
+            print("Running on desktop. Opening URL in browser:", url)
+            webbrowser.open(url)
 
 if __name__ == '__main__':
     IPTVApp().run()
