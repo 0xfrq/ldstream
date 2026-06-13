@@ -100,27 +100,85 @@ class MainLayout(BoxLayout):
         filtered_channels = [c for c in self.channels if c['category'] == category]
         self.ids.rv.data = [{'text': c['name'], 'url': c['url']} for c in filtered_channels]
 
+
+# For Android native view we need some JNI wrappers if on android
+if platform == 'android':
+    from jnius import autoclass
+    from runnable import Runnable # Usually provided via android.runnable but we can use PythonActivity
+    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    VideoView = autoclass('android.widget.VideoView')
+    Uri = autoclass('android.net.Uri')
+    MediaController = autoclass('android.widget.MediaController')
+    LinearLayout = autoclass('android.widget.LinearLayout')
+    ViewGroup = autoclass('android.view.ViewGroup')
+    LayoutParams = autoclass('android.view.ViewGroup')
+
+
 class IPTVApp(App):
     def build(self):
         return MainLayout()
         
     def play_video(self, url):
-        # We now use an in-app popup video player for BOTH Android and Desktop!
-        # No external apps (like VLC/MX Player) are required.
+        # The internal Kivy Video player does NOT support M3U8 out-of-the-box reliably 
+        # (which is why you see the "Image Not found" and GStreamer errors).
+        # We MUST use a native player. Since you don't want external apps like VLC/MX,
+        # we will create an IN-APP Android VideoView overlay!
         
-        # Create a simple video widget
-        video = Video(source=url, state='play', options={'allow_stretch': True})
-        
-        # Create a Popup to act as a fullscreen overlay
-        self.popup = Popup(
-            title="Video Player (Tap outside to close)", 
-            content=video,
-            size_hint=(0.95, 0.95)
-        )
-        
-        # Stop the video when the popup is closed
-        self.popup.bind(on_dismiss=lambda popup: setattr(video, 'state', 'stop'))
-        self.popup.open()
+        if platform == 'android':
+            try:
+                # We must modify Android UI elements on the Android UI thread!
+                # jnius allows us to run code on the UI thread.
+                @run_on_ui_thread
+                def show_native_video():
+                    activity = PythonActivity.mActivity
+                    
+                    # Create a VideoView
+                    vv = VideoView(activity)
+                    vv.setVideoURI(Uri.parse(url))
+                    
+                    # Add playback controls
+                    mc = MediaController(activity)
+                    mc.setAnchorView(vv)
+                    vv.setMediaController(mc)
+                    
+                    # Add it directly to the app's root view
+                    layout = LinearLayout(activity)
+                    layout.addView(vv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+                    
+                    activity.addContentView(layout, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+                    
+                    vv.start()
+                    
+                show_native_video()
+            except Exception as e:
+                print("Failed to launch Android native view:", e)
+        else:
+            # Fallback for desktop testing (will fail on desktop without gstreamer bad plugins, but fine)
+            video = Video(source=url, state='play', options={'allow_stretch': True})
+            self.popup = Popup(
+                title="Kivy Video (Requires Desktop Codecs)", 
+                content=video,
+                size_hint=(0.95, 0.95)
+            )
+            self.popup.bind(on_dismiss=lambda popup: setattr(video, 'state', 'stop'))
+            self.popup.open()
+
+
+# Helper to run on Android UI Thread
+def run_on_ui_thread(func):
+    if platform != 'android':
+        return func
+    from jnius import PythonJavaClass, java_method
+    class _Runnable(PythonJavaClass):
+        __javainterfaces__ = ['java/lang/Runnable']
+        __javacontext__ = 'app'
+        @java_method('()V')
+        def run(self):
+            func()
+    def wrapper():
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        PythonActivity.mActivity.runOnUiThread(_Runnable())
+    return wrapper
 
 if __name__ == '__main__':
     IPTVApp().run()
